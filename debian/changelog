@@ -1,3 +1,9 @@
+lilv (0.24.12-2deepin1) unstable; urgency=medium
+
+  * feat: add sw64 support.
+
+ -- hudeng <hudeng@deepin.org>  Fri, 30 May 2025 09:26:37 +0800
+
 lilv (0.24.12-2) unstable; urgency=medium
 
   * d/control: Fix really FTCBFS, with python3:native as B-D (Closes: #941710)
