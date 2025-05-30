@@ -1,2 +1,3 @@
 1001-dont_run_ldconfig.patch
 #1002-fix_gnu_kfreebsd_build.patch
+0001-deepin-sw_64-support.diff

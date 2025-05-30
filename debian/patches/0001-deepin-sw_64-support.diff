@@ -1,0 +1,12 @@
+diff --git a/waflib/Tools/c_config.py b/waflib/Tools/c_config.py
+index 03b6bf6..9b70cd5 100644
+--- a/waflib/Tools/c_config.py
++++ b/waflib/Tools/c_config.py
+@@ -56,6 +56,7 @@ MACRO_TO_DEST_CPU = {
+ '__mips__'    : 'mips',
+ '__sparc__'   : 'sparc',
+ '__alpha__'   : 'alpha',
++'__sw_64__'   : 'sunway',
+ '__aarch64__' : 'aarch64',
+ '__thumb__'   : 'thumb',
+ '__arm__'     : 'arm',
