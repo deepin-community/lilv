@@ -1,53 +1,53 @@
-/*
-  Copyright 2008-2019 David Robillard <d@drobilla.net>
-
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
+// Copyright 2008-2019 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
 #include "lilv_internal.h"
 
-#include "lilv/lilv.h"
-#include "sord/sord.h"
-#include "zix/common.h"
-#include "zix/tree.h"
+#include <lilv/lilv.h>
+#include <sord/sord.h>
+#include <zix/tree.h>
 
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
+
+typedef void (*LilvFreeFunc)(void* ptr);
 
 int
-lilv_ptr_cmp(const void* a, const void* b, void* user_data)
+lilv_ptr_cmp(const void* a, const void* b, const void* user_data)
 {
-  return (intptr_t)a - (intptr_t)b;
+  (void)user_data;
+
+  return a < b ? -1 : b < a ? 1 : 0;
 }
 
 int
-lilv_resource_node_cmp(const void* a, const void* b, void* user_data)
+lilv_resource_node_cmp(const void* a, const void* b, const void* user_data)
 {
+  (void)user_data;
+
   const SordNode* an = ((const LilvNode*)a)->node;
   const SordNode* bn = ((const LilvNode*)b)->node;
-  return (intptr_t)an - (intptr_t)bn;
+
+  return an < bn ? -1 : bn < an ? 1 : 0;
 }
 
 /* Generic collection functions */
 
-static inline LilvCollection*
-lilv_collection_new(ZixComparator cmp, ZixDestroyFunc destructor)
+static void
+destroy(void* const ptr, const void* const user_data)
 {
-  return zix_tree_new(false, cmp, NULL, destructor);
+  if (user_data) {
+    ((LilvFreeFunc)user_data)(ptr);
+  }
 }
 
-void
+static inline LilvCollection*
+lilv_collection_new(ZixTreeCompareFunc cmp, LilvFreeFunc free_func)
+{
+  return zix_tree_new(NULL, false, cmp, NULL, destroy, (const void*)free_func);
+}
+
+static void
 lilv_collection_free(LilvCollection* collection)
 {
   if (collection) {
@@ -55,13 +55,13 @@ lilv_collection_free(LilvCollection* collection)
   }
 }
 
-unsigned
+static unsigned
 lilv_collection_size(const LilvCollection* collection)
 {
   return (collection ? zix_tree_size((const ZixTree*)collection) : 0);
 }
 
-LilvIter*
+static LilvIter*
 lilv_collection_begin(const LilvCollection* collection)
 {
   return collection ? (LilvIter*)zix_tree_begin((ZixTree*)collection) : NULL;
@@ -70,6 +70,8 @@ lilv_collection_begin(const LilvCollection* collection)
 void*
 lilv_collection_get(const LilvCollection* collection, const LilvIter* i)
 {
+  (void)collection;
+
   return zix_tree_get((const ZixTreeIter*)i);
 }
 
@@ -78,28 +80,27 @@ lilv_collection_get(const LilvCollection* collection, const LilvIter* i)
 LilvScalePoints*
 lilv_scale_points_new(void)
 {
-  return lilv_collection_new(lilv_ptr_cmp,
-                             (ZixDestroyFunc)lilv_scale_point_free);
+  return lilv_collection_new(lilv_ptr_cmp, (LilvFreeFunc)lilv_scale_point_free);
 }
 
 LilvNodes*
 lilv_nodes_new(void)
 {
-  return lilv_collection_new(lilv_ptr_cmp, (ZixDestroyFunc)lilv_node_free);
+  return lilv_collection_new(lilv_ptr_cmp, (LilvFreeFunc)lilv_node_free);
 }
 
 LilvUIs*
 lilv_uis_new(void)
 {
   return lilv_collection_new(lilv_header_compare_by_uri,
-                             (ZixDestroyFunc)lilv_ui_free);
+                             (LilvFreeFunc)lilv_ui_free);
 }
 
 LilvPluginClasses*
 lilv_plugin_classes_new(void)
 {
   return lilv_collection_new(lilv_header_compare_by_uri,
-                             (ZixDestroyFunc)lilv_plugin_class_free);
+                             (LilvFreeFunc)lilv_plugin_class_free);
 }
 
 /* URI based accessors (for collections of things with URIs) */
@@ -166,31 +167,33 @@ lilv_nodes_merge(const LilvNodes* a, const LilvNodes* b)
 
 /* Iterator */
 
-#define LILV_COLLECTION_IMPL(prefix, CT, ET)                 \
-                                                             \
-  unsigned prefix##_size(const CT* collection)               \
-  {                                                          \
-    return lilv_collection_size(collection);                 \
-  }                                                          \
-                                                             \
-  LilvIter* prefix##_begin(const CT* collection)             \
-  {                                                          \
-    return lilv_collection_begin(collection);                \
-  }                                                          \
-                                                             \
-  const ET* prefix##_get(const CT* collection, LilvIter* i)  \
-  {                                                          \
-    return (ET*)lilv_collection_get(collection, i);          \
-  }                                                          \
-                                                             \
-  LilvIter* prefix##_next(const CT* collection, LilvIter* i) \
-  {                                                          \
-    return zix_tree_iter_next((ZixTreeIter*)i);              \
-  }                                                          \
-                                                             \
-  bool prefix##_is_end(const CT* collection, LilvIter* i)    \
-  {                                                          \
-    return zix_tree_iter_is_end((ZixTreeIter*)i);            \
+#define LILV_COLLECTION_IMPL(prefix, CT, ET)                      \
+                                                                  \
+  unsigned prefix##_size(const CT* collection)                    \
+  {                                                               \
+    return lilv_collection_size(collection);                      \
+  }                                                               \
+                                                                  \
+  LilvIter* prefix##_begin(const CT* collection)                  \
+  {                                                               \
+    return lilv_collection_begin(collection);                     \
+  }                                                               \
+                                                                  \
+  const ET* prefix##_get(const CT* collection, const LilvIter* i) \
+  {                                                               \
+    return (ET*)lilv_collection_get(collection, i);               \
+  }                                                               \
+                                                                  \
+  LilvIter* prefix##_next(const CT* collection, LilvIter* i)      \
+  {                                                               \
+    (void)collection;                                             \
+    return zix_tree_iter_next((ZixTreeIter*)i);                   \
+  }                                                               \
+                                                                  \
+  bool prefix##_is_end(const CT* collection, const LilvIter* i)   \
+  {                                                               \
+    (void)collection;                                             \
+    return zix_tree_iter_is_end((const ZixTreeIter*)i);           \
   }
 
 LILV_COLLECTION_IMPL(lilv_plugin_classes, LilvPluginClasses, LilvPluginClass)

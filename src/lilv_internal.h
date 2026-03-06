@@ -1,18 +1,5 @@
-/*
-  Copyright 2007-2019 David Robillard <d@drobilla.net>
-
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
+// Copyright 2007-2019 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
 #ifndef LILV_INTERNAL_H
 #define LILV_INTERNAL_H
@@ -21,47 +8,20 @@
 extern "C" {
 #endif
 
-#include "lilv_config.h" // IWYU pragma: keep
+#include "lilv_config.h"
 
-#include "lilv/lilv.h"
-#include "lv2/core/lv2.h"
-#include "serd/serd.h"
-#include "sord/sord.h"
-#include "zix/tree.h"
+#include <lilv/lilv.h>
+#include <lv2/core/lv2.h>
+#include <serd/serd.h>
+#include <sord/sord.h>
+#include <zix/tree.h>
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
-#ifdef _WIN32
-#  include <direct.h>
-#  include <stdio.h>
-#  include <windows.h>
-#  define dlopen(path, flags) LoadLibrary(path)
-#  define dlclose(lib) FreeLibrary((HMODULE)lib)
-#  ifdef _MSC_VER
-#    define __func__ __FUNCTION__
-#    ifndef snprintf
-#      define snprintf _snprintf
-#    endif
-#  endif
-#  ifndef INFINITY
-#    define INFINITY DBL_MAX + DBL_MAX
-#  endif
-#  ifndef NAN
-#    define NAN INFINITY - INFINITY
-#  endif
-static inline const char*
-dlerror(void)
-{
-  return "Unknown error";
-}
-#else
-#  include <dlfcn.h>
-#endif
-
 #ifdef LILV_DYN_MANIFEST
-#  include "lv2/dynmanifest/dynmanifest.h"
+#  include <lv2/dynmanifest/dynmanifest.h>
 #endif
 
 /*
@@ -275,15 +235,6 @@ lilv_plugin_get_unique(const LilvPlugin* plugin,
                        const SordNode*   subject,
                        const SordNode*   predicate);
 
-void
-lilv_collection_free(LilvCollection* collection);
-
-unsigned
-lilv_collection_size(const LilvCollection* collection);
-
-LilvIter*
-lilv_collection_begin(const LilvCollection* collection);
-
 void*
 lilv_collection_get(const LilvCollection* collection, const LilvIter* i);
 
@@ -332,9 +283,6 @@ lilv_world_blank_node_prefix(LilvWorld* world);
 SerdStatus
 lilv_world_load_file(LilvWorld* world, SerdReader* reader, const LilvNode* uri);
 
-SerdStatus
-lilv_world_load_graph(LilvWorld* world, SordNode* graph, const LilvNode* uri);
-
 LilvUI*
 lilv_ui_new(LilvWorld* world,
             LilvNode*  uri,
@@ -351,16 +299,13 @@ LilvNode*
 lilv_node_new_from_node(LilvWorld* world, const SordNode* node);
 
 int
-lilv_header_compare_by_uri(const void* a, const void* b, void* user_data);
+lilv_header_compare_by_uri(const void* a, const void* b, const void* user_data);
 
 int
-lilv_lib_compare(const void* a, const void* b, void* user_data);
+lilv_ptr_cmp(const void* a, const void* b, const void* user_data);
 
 int
-lilv_ptr_cmp(const void* a, const void* b, void* user_data);
-
-int
-lilv_resource_node_cmp(const void* a, const void* b, void* user_data);
+lilv_resource_node_cmp(const void* a, const void* b, const void* user_data);
 
 static inline int
 lilv_version_cmp(const LilvVersion* a, const LilvVersion* b)
@@ -428,30 +373,12 @@ char*
 lilv_get_lang(void);
 
 char*
-lilv_expand(const char* path);
-
-char*
 lilv_get_latest_copy(const char* path, const char* copy_path);
 
 char*
 lilv_find_free_path(const char* in_path,
                     bool (*exists)(const char*, const void*),
                     const void* user_data);
-
-typedef void (*LilvVoidFunc)(void);
-
-/** dlsym wrapper to return a function pointer (without annoying warning) */
-static inline LilvVoidFunc
-lilv_dlfunc(void* handle, const char* symbol)
-{
-#ifdef _WIN32
-  return (LilvVoidFunc)GetProcAddress((HMODULE)handle, symbol);
-#else
-  typedef LilvVoidFunc (*VoidFuncGetter)(void*, const char*);
-  VoidFuncGetter dlfunc = (VoidFuncGetter)dlsym;
-  return dlfunc(handle, symbol);
-#endif
-}
 
 #ifdef LILV_DYN_MANIFEST
 static const LV2_Feature* const dman_features = {NULL};

@@ -1,23 +1,11 @@
-/*
-  Copyright 2020 David Robillard <d@drobilla.net>
-
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
+// Copyright 2020 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
 #ifndef LILV_TEST_UTILS_H
 #define LILV_TEST_UTILS_H
 
-#include "lilv/lilv.h"
+#include <lilv/lilv.h>
+#include <zix/attributes.h>
 
 #define MANIFEST_PREFIXES \
   "\
@@ -55,7 +43,7 @@ typedef struct {
   LilvNode*  plugin1_uri;
   LilvNode*  plugin2_uri;
   char*      test_bundle_path;
-  char*      test_bundle_uri;
+  LilvNode*  test_bundle_uri;
   char*      test_manifest_path;
   char*      test_content_path;
   int        test_count;
@@ -72,11 +60,17 @@ lilv_test_env_free(LilvTestEnv* env);
 
 // Create a bundle with a manifest and plugin files, without loading anything
 int
-create_bundle(LilvTestEnv* env, const char* manifest, const char* plugin);
+create_bundle(LilvTestEnv* env,
+              const char*  name,
+              const char*  manifest,
+              const char*  plugin);
 
 // Create a bundle with a manifest and plugin files, then load everything
 int
-start_bundle(LilvTestEnv* env, const char* manifest, const char* plugin);
+start_bundle(LilvTestEnv* env,
+             const char*  name,
+             const char*  manifest,
+             const char*  plugin);
 
 // Remove the created bundle from the file system and free its paths in `env`
 void
@@ -85,5 +79,14 @@ delete_bundle(LilvTestEnv* env);
 // Set an environment variable so it is immediately visible in this process
 void
 set_env(const char* name, const char* value);
+
+// Create a unique temporary directory
+ZIX_MALLOC_FUNC
+char*
+lilv_create_temporary_directory(const char* pattern);
+
+// Return a new string that is a concatenation of two given strings
+char*
+string_concat(const char* head, const char* tail);
 
 #endif // LILV_TEST_UTILS_H

@@ -1,38 +1,25 @@
-/*
-  Copyright 2007-2019 David Robillard <d@drobilla.net>
+// Copyright 2007-2024 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
-
-#include "filesystem.h"
-#include "lilv_config.h" // IWYU pragma: keep
+#include "lilv_config.h"
 #include "lilv_internal.h"
 
-#include "lilv/lilv.h"
-#include "serd/serd.h"
-#include "sord/sord.h"
-#include "zix/common.h"
-#include "zix/tree.h"
-
-#include "lv2/core/lv2.h"
-#include "lv2/presets/presets.h"
-
 #ifdef LILV_DYN_MANIFEST
-#  include "lv2/dynmanifest/dynmanifest.h"
-#  include <dlfcn.h>
+#  include "dylib.h"
+#  include <lv2/dynmanifest/dynmanifest.h>
 #endif
 
+#include <lilv/lilv.h>
+#include <lv2/core/lv2.h>
+#include <lv2/presets/presets.h>
+#include <serd/serd.h>
+#include <sord/sord.h>
+#include <zix/environment.h>
+#include <zix/filesystem.h>
+#include <zix/tree.h>
+
 #include <assert.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -41,6 +28,16 @@
 
 static int
 lilv_world_drop_graph(LilvWorld* world, const SordNode* graph);
+
+static int
+lilv_lib_compare(const void* a, const void* b, const void* user_data);
+
+static void
+destroy_node(void* const ptr, const void* const user_data)
+{
+  (void)user_data;
+  lilv_node_free((LilvNode*)ptr);
+}
 
 LilvWorld*
 lilv_world_new(void)
@@ -61,10 +58,11 @@ lilv_world_new(void)
   world->plugin_classes = lilv_plugin_classes_new();
   world->plugins        = lilv_plugins_new();
   world->zombies        = lilv_plugins_new();
-  world->loaded_files   = zix_tree_new(
-    false, lilv_resource_node_cmp, NULL, (ZixDestroyFunc)lilv_node_free);
 
-  world->libs = zix_tree_new(false, lilv_lib_compare, NULL, NULL);
+  world->loaded_files =
+    zix_tree_new(NULL, false, lilv_resource_node_cmp, NULL, destroy_node, NULL);
+
+  world->libs = zix_tree_new(NULL, false, lilv_lib_compare, NULL, NULL, NULL);
 
 #define NS_DCTERMS "http://purl.org/dc/terms/"
 #define NS_DYNMAN "http://lv2plug.in/ns/ext/dynmanifest#"
@@ -268,7 +266,7 @@ lilv_world_get(LilvWorld*      world,
   SordNode* snode = sord_get(world->model,
                              subject ? subject->node : NULL,
                              predicate ? predicate->node : NULL,
-                             object ? object->node : NULL,
+                             object->node,
                              NULL);
   LilvNode* lnode = lilv_node_new_from_node(world, snode);
   sord_node_free(world->world, snode);
@@ -337,15 +335,6 @@ lilv_world_find_nodes_internal(LilvWorld*      world,
     (object == NULL) ? SORD_OBJECT : SORD_SUBJECT);
 }
 
-static SerdNode
-lilv_new_uri_relative_to_base(const uint8_t* uri_str,
-                              const uint8_t* base_uri_str)
-{
-  SerdURI base_uri;
-  serd_uri_parse(base_uri_str, &base_uri);
-  return serd_node_new_uri_from_string(uri_str, &base_uri, NULL);
-}
-
 const uint8_t*
 lilv_world_blank_node_prefix(LilvWorld* world)
 {
@@ -356,10 +345,13 @@ lilv_world_blank_node_prefix(LilvWorld* world)
 
 /** Comparator for sequences (e.g. world->plugins). */
 int
-lilv_header_compare_by_uri(const void* a, const void* b, void* user_data)
+lilv_header_compare_by_uri(const void* a, const void* b, const void* user_data)
 {
+  (void)user_data;
+
   const struct LilvHeader* const header_a = (const struct LilvHeader*)a;
   const struct LilvHeader* const header_b = (const struct LilvHeader*)b;
+
   return strcmp(lilv_node_as_uri(header_a->uri),
                 lilv_node_as_uri(header_b->uri));
 }
@@ -371,12 +363,17 @@ lilv_header_compare_by_uri(const void* a, const void* b, void* user_data)
    handle the case where the same library is loaded with different bundles, and
    consequently different contents (mainly plugins).
  */
-int
-lilv_lib_compare(const void* a, const void* b, void* user_data)
+static int
+lilv_lib_compare(const void* a, const void* b, const void* user_data)
 {
+  (void)user_data;
+
   const LilvLib* const lib_a = (const LilvLib*)a;
   const LilvLib* const lib_b = (const LilvLib*)b;
-  int cmp = strcmp(lilv_node_as_uri(lib_a->uri), lilv_node_as_uri(lib_b->uri));
+
+  const int cmp =
+    strcmp(lilv_node_as_uri(lib_a->uri), lilv_node_as_uri(lib_b->uri));
+
   return cmp ? cmp : strcmp(lib_a->bundle_path, lib_b->bundle_path);
 }
 
@@ -387,7 +384,7 @@ lilv_collection_find_by_uri(const ZixTree* seq, const LilvNode* uri)
   ZixTreeIter* i = NULL;
   if (lilv_node_is_uri(uri)) {
     struct LilvHeader key = {NULL, (LilvNode*)uri};
-    zix_tree_find(seq, &key, &i);
+    (void)zix_tree_find(seq, &key, &i);
   }
   return i;
 }
@@ -396,7 +393,7 @@ lilv_collection_find_by_uri(const ZixTree* seq, const LilvNode* uri)
 struct LilvHeader*
 lilv_collection_get_by_uri(const ZixTree* seq, const LilvNode* uri)
 {
-  ZixTreeIter* const i = lilv_collection_find_by_uri(seq, uri);
+  const ZixTreeIter* const i = lilv_collection_find_by_uri(seq, uri);
 
   return i ? (struct LilvHeader*)zix_tree_get(i) : NULL;
 }
@@ -434,6 +431,8 @@ lilv_world_add_plugin(LilvWorld*      world,
                       void*           dynmanifest,
                       const SordNode* bundle)
 {
+  (void)dynmanifest;
+
   LilvNode*    plugin_uri = lilv_node_new_from_node(world, plugin_node);
   ZixTreeIter* z          = NULL;
   LilvPlugin*  plugin =
@@ -496,7 +495,7 @@ lilv_world_add_plugin(LilvWorld*      world,
   sord_iter_free(files);
 }
 
-SerdStatus
+static SerdStatus
 lilv_world_load_graph(LilvWorld* world, SordNode* graph, const LilvNode* uri)
 {
   const SerdNode* base = sord_node_to_serd_node(uri->node);
@@ -554,8 +553,8 @@ lilv_world_load_dyn_manifest(LilvWorld*      world,
     }
 
     // Open library
-    dlerror();
-    void* lib = dlopen(lib_path, RTLD_LAZY);
+    dylib_error();
+    void* lib = dylib_open(lib_path, DYLIB_LAZY);
     if (!lib) {
       LILV_ERRORF(
         "Failed to open dynmanifest library `%s' (%s)\n", lib_path, dlerror());
@@ -567,11 +566,11 @@ lilv_world_load_dyn_manifest(LilvWorld*      world,
     // Open dynamic manifest
     typedef int (*OpenFunc)(LV2_Dyn_Manifest_Handle*,
                             const LV2_Feature* const*);
-    OpenFunc dmopen = (OpenFunc)lilv_dlfunc(lib, "lv2_dyn_manifest_open");
+    OpenFunc dmopen = (OpenFunc)dylib_func(lib, "lv2_dyn_manifest_open");
     if (!dmopen || dmopen(&handle, &dman_features)) {
       LILV_ERRORF("No `lv2_dyn_manifest_open' in `%s'\n", lib_path);
       sord_iter_free(binaries);
-      dlclose(lib);
+      dylib_close(lib);
       lilv_free(lib_path);
       continue;
     }
@@ -579,11 +578,11 @@ lilv_world_load_dyn_manifest(LilvWorld*      world,
     // Get subjects (the data that would be in manifest.ttl)
     typedef int (*GetSubjectsFunc)(LV2_Dyn_Manifest_Handle, FILE*);
     GetSubjectsFunc get_subjects_func =
-      (GetSubjectsFunc)lilv_dlfunc(lib, "lv2_dyn_manifest_get_subjects");
+      (GetSubjectsFunc)dylib_func(lib, "lv2_dyn_manifest_get_subjects");
     if (!get_subjects_func) {
       LILV_ERRORF("No `lv2_dyn_manifest_get_subjects' in `%s'\n", lib_path);
       sord_iter_free(binaries);
-      dlclose(lib);
+      dylib_close(lib);
       lilv_free(lib_path);
       continue;
     }
@@ -636,7 +635,12 @@ lilv_world_load_dyn_manifest(LilvWorld*      world,
   }
   sord_iter_free(iter);
   sord_free(model);
-#endif // LILV_DYN_MANIFEST
+
+#else // LILV_DYN_MANIFEST
+  (void)world;
+  (void)bundle_node;
+  (void)manifest;
+#endif
 }
 
 #ifdef LILV_DYN_MANIFEST
@@ -645,12 +649,12 @@ lilv_dynmanifest_free(LilvDynManifest* dynmanifest)
 {
   typedef int (*CloseFunc)(LV2_Dyn_Manifest_Handle);
   CloseFunc close_func =
-    (CloseFunc)lilv_dlfunc(dynmanifest->lib, "lv2_dyn_manifest_close");
+    (CloseFunc)dylib_func(dynmanifest->lib, "lv2_dyn_manifest_close");
   if (close_func) {
     close_func(dynmanifest->handle);
   }
 
-  dlclose(dynmanifest->lib);
+  dylib_close(dynmanifest->lib);
   lilv_node_free(dynmanifest->bundle);
   free(dynmanifest);
 }
@@ -659,10 +663,24 @@ lilv_dynmanifest_free(LilvDynManifest* dynmanifest)
 LilvNode*
 lilv_world_get_manifest_uri(LilvWorld* world, const LilvNode* bundle_uri)
 {
-  SerdNode manifest_uri = lilv_new_uri_relative_to_base(
-    (const uint8_t*)"manifest.ttl", sord_node_get_string(bundle_uri->node));
-  LilvNode* manifest = lilv_new_uri(world, (const char*)manifest_uri.buf);
-  serd_node_free(&manifest_uri);
+  // Get the string and length of the given bundle URI
+  size_t            bundle_uri_length = 0U;
+  const char* const bundle_uri_string =
+    (const char*)sord_node_get_string_counted(bundle_uri->node,
+                                              &bundle_uri_length);
+  if (bundle_uri_length < 1U) {
+    return NULL;
+  }
+
+  // Build the manifest URI by inserting a separating "/" if necessary
+  const char  last = bundle_uri_string[bundle_uri_length - 1U];
+  char* const manifest_uri_string =
+    (last == '/') ? lilv_strjoin(bundle_uri_string, "manifest.ttl", NULL)
+                  : lilv_strjoin(bundle_uri_string, "/", "manifest.ttl", NULL);
+
+  // Make a node from the manifeset URI to return
+  LilvNode* const manifest = lilv_new_uri(world, manifest_uri_string);
+  free(manifest_uri_string);
   return manifest;
 }
 
@@ -672,10 +690,10 @@ load_plugin_model(LilvWorld*      world,
                   const LilvNode* plugin_uri)
 {
   // Create model and reader for loading into it
-  SordNode*   bundle_node = bundle_uri->node;
-  SordModel*  model       = sord_new(world->world, SORD_SPO | SORD_OPS, false);
-  SerdEnv*    env         = serd_env_new(sord_node_to_serd_node(bundle_node));
-  SerdReader* reader      = sord_new_reader(model, env, SERD_TURTLE, NULL);
+  const SordNode* bundle_node = bundle_uri->node;
+  SordModel*      model  = sord_new(world->world, SORD_SPO | SORD_OPS, false);
+  SerdEnv*        env    = serd_env_new(sord_node_to_serd_node(bundle_node));
+  SerdReader*     reader = sord_new_reader(model, env, SERD_TURTLE, NULL);
 
   // Load manifest
   LilvNode* manifest_uri = lilv_world_get_manifest_uri(world, bundle_uri);
@@ -707,7 +725,7 @@ load_plugin_model(LilvWorld*      world,
 }
 
 static LilvVersion
-get_version(LilvWorld* world, SordModel* model, const LilvNode* subject)
+get_version(const LilvWorld* world, SordModel* model, const LilvNode* subject)
 {
   const SordNode* minor_node =
     sord_get(model, subject->node, world->uris.lv2_minorVersion, NULL, NULL);
@@ -716,8 +734,14 @@ get_version(LilvWorld* world, SordModel* model, const LilvNode* subject)
 
   LilvVersion version = {0, 0};
   if (minor_node && micro_node) {
-    version.minor = atoi((const char*)sord_node_get_string(minor_node));
-    version.micro = atoi((const char*)sord_node_get_string(micro_node));
+    const char* const minor_str = (const char*)sord_node_get_string(minor_node);
+    const char* const micro_str = (const char*)sord_node_get_string(micro_node);
+    const long        minor     = strtol(minor_str, NULL, 10);
+    const long        micro     = strtol(micro_str, NULL, 10);
+    if (minor >= 0 && minor < INT_MAX && micro >= 0 && micro < INT_MAX) {
+      version.minor = (int)minor;
+      version.micro = (int)micro;
+    }
   }
 
   return version;
@@ -734,6 +758,9 @@ lilv_world_load_bundle(LilvWorld* world, const LilvNode* bundle_uri)
 
   SordNode* bundle_node = bundle_uri->node;
   LilvNode* manifest    = lilv_world_get_manifest_uri(world, bundle_uri);
+  if (!manifest) {
+    return;
+  }
 
   // Read manifest into model with graph = bundle_node
   SerdStatus st = lilv_world_load_graph(world, bundle_node, manifest);
@@ -857,6 +884,7 @@ lilv_world_drop_graph(LilvWorld* world, const SordNode* graph)
   while (!sord_iter_end(i)) {
     const SerdStatus st = sord_erase(world->model, i);
     if (st) {
+      sord_iter_free(i);
       LILV_ERRORF("Error removing statement from <%s> (%s)\n",
                   sord_node_get_string(graph),
                   serd_strerror(st));
@@ -913,7 +941,7 @@ lilv_world_unload_bundle(LilvWorld* world, const LilvNode* bundle_uri)
      still be used.
   */
   ZixTreeIter* i = zix_tree_begin((ZixTree*)world->plugins);
-  while (i != zix_tree_end((ZixTree*)world->plugins)) {
+  while (i && i != zix_tree_end((ZixTree*)world->plugins)) {
     LilvPlugin*  p    = (LilvPlugin*)zix_tree_get(i);
     ZixTreeIter* next = zix_tree_iter_next(i);
 
@@ -947,9 +975,9 @@ load_dir_entry(const char* dir, const char* name, void* data)
 static void
 lilv_world_load_directory(LilvWorld* world, const char* dir_path)
 {
-  char* path = lilv_expand(dir_path);
+  char* const path = zix_expand_environment_strings(NULL, dir_path);
   if (path) {
-    lilv_dir_for_each(path, world, load_dir_entry);
+    zix_dir_for_each(path, world, load_dir_entry);
     free(path);
   }
 }
@@ -995,7 +1023,8 @@ lilv_world_load_specifications(LilvWorld* world)
 {
   for (LilvSpec* spec = world->specs; spec; spec = spec->next) {
     LILV_FOREACH (nodes, f, spec->data_uris) {
-      LilvNode* file = (LilvNode*)lilv_collection_get(spec->data_uris, f);
+      const LilvNode* file =
+        (const LilvNode*)lilv_collection_get(spec->data_uris, f);
       lilv_world_load_graph(world, NULL, file);
     }
   }
@@ -1085,11 +1114,11 @@ lilv_world_load_file(LilvWorld* world, SerdReader* reader, const LilvNode* uri)
   size_t               uri_len = 0;
   const uint8_t* const uri_str =
     sord_node_get_string_counted(uri->node, &uri_len);
-  if (strncmp((const char*)uri_str, "file:", 5)) {
+  if (!!strncmp((const char*)uri_str, "file:", 5)) {
     return SERD_FAILURE; // Not a local file
   }
 
-  if (strcmp((const char*)uri_str + uri_len - 4, ".ttl")) {
+  if (!!strcmp((const char*)uri_str + uri_len - 4, ".ttl")) {
     return SERD_FAILURE; // Not a Turtle file
   }
 

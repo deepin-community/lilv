@@ -1,29 +1,13 @@
-/*
-  Copyright 2012-2019 David Robillard <d@drobilla.net>
+// Copyright 2012-2019 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
-
+#include "dylib.h"
 #include "lilv_internal.h"
 
-#include "lilv/lilv.h"
-#include "lv2/core/lv2.h"
-#include "serd/serd.h"
-#include "zix/tree.h"
-
-#ifndef _WIN32
-#  include <dlfcn.h>
-#endif
+#include <lilv/lilv.h>
+#include <lv2/core/lv2.h>
+#include <serd/serd.h>
+#include <zix/tree.h>
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -50,33 +34,33 @@ lilv_lib_open(LilvWorld*                world,
     return NULL;
   }
 
-  dlerror();
-  void* lib = dlopen(lib_path, RTLD_NOW);
+  dylib_error();
+  void* lib = dylib_open(lib_path, DYLIB_NOW);
   if (!lib) {
-    LILV_ERRORF("Failed to open library %s (%s)\n", lib_path, dlerror());
+    LILV_ERRORF("Failed to open library %s (%s)\n", lib_path, dylib_error());
     serd_free(lib_path);
     return NULL;
   }
 
   LV2_Descriptor_Function df =
-    (LV2_Descriptor_Function)lilv_dlfunc(lib, "lv2_descriptor");
+    (LV2_Descriptor_Function)dylib_func(lib, "lv2_descriptor");
 
   LV2_Lib_Descriptor_Function ldf =
-    (LV2_Lib_Descriptor_Function)lilv_dlfunc(lib, "lv2_lib_descriptor");
+    (LV2_Lib_Descriptor_Function)dylib_func(lib, "lv2_lib_descriptor");
 
   const LV2_Lib_Descriptor* desc = NULL;
   if (ldf) {
     desc = ldf(bundle_path, features);
     if (!desc) {
       LILV_ERRORF("Call to %s:lv2_lib_descriptor failed\n", lib_path);
-      dlclose(lib);
+      dylib_close(lib);
       serd_free(lib_path);
       return NULL;
     }
   } else if (!df) {
     LILV_ERRORF("No `lv2_descriptor' or `lv2_lib_descriptor' in %s\n",
                 lib_path);
-    dlclose(lib);
+    dylib_close(lib);
     serd_free(lib_path);
     return NULL;
   }
@@ -113,7 +97,7 @@ void
 lilv_lib_close(LilvLib* lib)
 {
   if (--lib->refs == 0) {
-    dlclose(lib->lib);
+    dylib_close(lib->lib);
 
     ZixTreeIter* i = NULL;
     if (lib->world->libs && !zix_tree_find(lib->world->libs, lib, &i)) {
