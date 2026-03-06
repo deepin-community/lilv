@@ -1,32 +1,26 @@
+# Copyright 2020-2024 David Robillard <d@drobilla.net>
+# SPDX-License-Identifier: 0BSD OR ISC
+
 Checks: >
   *,
-  -*-magic-numbers,
-  -*-uppercase-literal-suffix,
-  -android-cloexec-fopen,
-  -bugprone-branch-clone,
+  -*-macro-to-enum,
+  -*-vararg,
+  -altera-*,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-easily-swappable-parameters,
   -bugprone-macro-parentheses,
-  -bugprone-narrowing-conversions,
-  -bugprone-not-null-terminated-result,
-  -bugprone-reserved-identifier,
-  -bugprone-suspicious-string-compare,
-  -cert-dcl37-c,
-  -cert-dcl51-cpp,
-  -cert-err34-c,
-  -clang-analyzer-alpha.*,
-  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
-  -cppcoreguidelines-avoid-non-const-global-variables,
-  -cppcoreguidelines-macro-usage,
-  -cppcoreguidelines-narrowing-conversions,
-  -google-readability-todo,
-  -hicpp-multiway-paths-covered,
-  -hicpp-signed-bitwise,
-  -llvm-header-guard,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -bugprone-suspicious-realloc-usage,
+  -clang-diagnostic-unused-function,
+  -clang-diagnostic-unused-macros,
   -llvmlibc-*,
-  -misc-no-recursion,
-  -misc-non-private-member-variables-in-classes,
-  -misc-unused-parameters,
-  -modernize-use-trailing-return-type,
-  -readability-implicit-bool-conversion,
-WarningsAsErrors: '*'
-HeaderFilterRegex: '.*'
+  -misc-include-cleaner,
+  -readability-identifier-length,
+CheckOptions:
+  - key:   hicpp-uppercase-literal-suffix.NewSuffixes
+    value: 'L;U;UL;ULL'
+  - key:   readability-uppercase-literal-suffix.NewSuffixes
+    value: 'L;U;UL;ULL'
 FormatStyle: file
+HeaderFilterRegex: '.*/lilv/[^/]+.h'
+WarningsAsErrors: '*'

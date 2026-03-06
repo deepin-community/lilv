@@ -1,8 +1,93 @@
-lilv (0.24.12-2deepin1) unstable; urgency=medium
+lilv (0.24.26-1) unstable; urgency=medium
 
-  * feat: add sw64 support.
+  * New upstream version 0.24.26
+  * Bump Standards-Version to 4.7.0
+  * Bump d/copyright years
 
- -- hudeng <hudeng@deepin.org>  Fri, 30 May 2025 09:26:37 +0800
+ -- Dennis Braun <snd@debian.org>  Sun, 09 Feb 2025 22:00:43 +0100
+
+lilv (0.24.24-2) unstable; urgency=medium
+
+  * Source-only upload
+
+ -- Dennis Braun <snd@debian.org>  Sat, 09 Mar 2024 12:07:02 +0100
+
+lilv (0.24.24-1) unstable; urgency=medium
+
+  * New upstream version 0.24.24
+  * Provide the liblilv-doc package
+  * Change B-D from pkg-config to pkgconf
+  * Update d/copyright years and files
+  * Change my email address
+
+ -- Dennis Braun <snd@debian.org>  Fri, 08 Mar 2024 13:52:41 +0100
+
+lilv (0.24.22-1) unstable; urgency=medium
+
+  * Team upload
+  * New upstream version 0.24.22
+  * debian/control:
+    - Add libzix-dev to (Build-)Depends
+    - Update Homepage
+  * debian/rules: Remove strict, no longer supported upstream
+  * debian/liblilv-0-0.symbols: Remove internal zix symbols
+  * debian/copyright:
+    - Bump copyright years
+    - Update file paths after some have been moved
+
+ -- Sebastian Ramacher <sramacher@debian.org>  Wed, 01 Nov 2023 10:51:15 +0100
+
+lilv (0.24.20-3) unstable; urgency=medium
+
+  * Team upload
+  * debian/rules: Correctly specify options to meson build system
+  * debian/control:
+    - Bump Standards-Version
+    - Use pkgconf
+    - Add ninja-build as BD
+
+ -- Sebastian Ramacher <sramacher@debian.org>  Sun, 29 Oct 2023 13:16:08 +0100
+
+lilv (0.24.20-2) unstable; urgency=medium
+
+  * Team upload.
+  * Upload to unstable
+
+ -- Sebastian Ramacher <sramacher@debian.org>  Sun, 29 Oct 2023 10:14:56 +0100
+
+lilv (0.24.20-1) experimental; urgency=medium
+
+  [ Dennis Braun ]
+  * New upstream version 0.24.20
+  * Build with meson
+  * Introduce the python3-lilv package
+  * Update lilv-utils.install
+  * d/copyright: Drop waf* entry and BSD license
+  * d/copyright: Bump copyright year, add files licensed under 0BSD license too
+    and add 0BSD license
+  * Remove obsolete d/clean file
+  * Drop obsolete ldconfig patch
+  * Drop obsolete lintian-overrides
+
+  [ Debian Janitor ]
+  * Remove constraints unnecessary since buster (oldstable)
+
+ -- Dennis Braun <d_braun@kabelmail.de>  Wed, 28 Sep 2022 21:25:08 +0200
+
+lilv (0.24.14-1) unstable; urgency=medium
+
+  [ Helmut Grohne ]
+  * Drop libjack-dev from Build-Depends, unused since 0.4.4. (Closes: #981273)
+
+  [ Dennis Braun ]
+  * New upstream version 0.24.14
+  * Refresh patch
+  * Bump Standards Version to 4.6.1
+  * d/copyright: Bump year and add myself to the d/ section
+  * Update d/liblilv-0-0.symbols
+  * Add salsa ci config
+
+ -- Dennis Braun <d_braun@kabelmail.de>  Tue, 31 May 2022 19:20:25 +0200
 
 lilv (0.24.12-2) unstable; urgency=medium
 

@@ -1,26 +1,11 @@
-/*
-  Copyright 2007-2020 David Robillard <d@drobilla.net>
-
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
+// Copyright 2007-2020 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
 #undef NDEBUG
 
 #include "lilv_test_utils.h"
 
-#include "../src/lilv_internal.h"
-
-#include "lilv/lilv.h"
+#include <lilv/lilv.h>
 
 #include <assert.h>
 #include <float.h>
@@ -82,9 +67,14 @@ main(void)
   LilvTestEnv* const env   = lilv_test_env_new();
   LilvWorld* const   world = env->world;
 
-  if (start_bundle(env, SIMPLE_MANIFEST_TTL, plugin_ttl)) {
+  lilv_world_load_all(world);
+
+  if (create_bundle(env, "plugin.lv2", SIMPLE_MANIFEST_TTL, plugin_ttl)) {
     return 1;
   }
+
+  lilv_world_load_specifications(env->world);
+  lilv_world_load_bundle(env->world, env->test_bundle_uri);
 
   const LilvPlugins* plugins = lilv_world_get_all_plugins(world);
   const LilvPlugin*  plug = lilv_plugins_get_by_uri(plugins, env->plugin1_uri);
@@ -104,19 +94,19 @@ main(void)
   assert(!lilv_plugin_get_related(plug, NULL));
 
   const LilvNode* plug_bundle_uri = lilv_plugin_get_bundle_uri(plug);
-  assert(!strcmp(lilv_node_as_string(plug_bundle_uri), env->test_bundle_uri));
+  assert(lilv_node_equals(plug_bundle_uri, env->test_bundle_uri));
 
   const LilvNodes* data_uris = lilv_plugin_get_data_uris(plug);
   assert(lilv_nodes_size(data_uris) == 2);
 
-  LilvNode* project = lilv_plugin_get_project(plug);
+  const LilvNode* project = lilv_plugin_get_project(plug);
   assert(!project);
 
   char* manifest_uri =
-    lilv_strjoin(lilv_node_as_string(plug_bundle_uri), "manifest.ttl", NULL);
+    string_concat(lilv_node_as_string(plug_bundle_uri), "manifest.ttl");
 
   char* data_uri =
-    lilv_strjoin(lilv_node_as_string(plug_bundle_uri), "plugin.ttl", NULL);
+    string_concat(lilv_node_as_string(plug_bundle_uri), "plugin.ttl");
 
   LilvNode* manifest_uri_val = lilv_new_uri(world, manifest_uri);
   assert(lilv_nodes_contains(data_uris, manifest_uri_val));
@@ -226,7 +216,7 @@ main(void)
   LilvNode*  blank_p = lilv_new_uri(world, "http://example.org/blank");
   LilvNodes* blanks  = lilv_plugin_get_value(plug, blank_p);
   assert(lilv_nodes_size(blanks) == 1);
-  LilvNode* blank = lilv_nodes_get_first(blanks);
+  const LilvNode* blank = lilv_nodes_get_first(blanks);
   assert(lilv_node_is_blank(blank));
   const char* blank_str = lilv_node_as_blank(blank);
   char*       blank_tok = lilv_node_get_turtle_token(blank);

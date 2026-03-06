@@ -1,19 +1,6 @@
-/*
-  Copyright 2006-2019 David Robillard <d@drobilla.net>
-  Copyright 2006 Steve Harris <steve@plugin.org.uk>
-
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
+// Copyright 2006-2019 David Robillard <d@drobilla.net>
+// Copyright 2006 Steve Harris <steve@plugin.org.uk>
+// SPDX-License-Identifier: ISC
 
 /**
    LV2 headers are based on the URI of the specification they come from, so a
@@ -22,7 +9,7 @@
    replacing `http:/` with `lv2` any header in the specification bundle can be
    included, in this case `lv2.h`.
 */
-#include "lv2/core/lv2.h"
+#include <lv2/core/lv2.h>
 
 /** Include standard C headers */
 #include <stdint.h>
@@ -73,6 +60,11 @@ instantiate(const LV2_Descriptor*     descriptor,
             const char*               bundle_path,
             const LV2_Feature* const* features)
 {
+  (void)descriptor;
+  (void)rate;
+  (void)bundle_path;
+  (void)features;
+
   Test* test = (Test*)malloc(sizeof(Test));
 
   return (LV2_Handle)test;
@@ -88,7 +80,11 @@ instantiate(const LV2_Descriptor*     descriptor,
 */
 static void
 connect_port(LV2_Handle instance, uint32_t port, void* data)
-{}
+{
+  (void)instance;
+  (void)port;
+  (void)data;
+}
 
 /**
    The activate() method is called by the host to initialise and prepare the
@@ -101,12 +97,17 @@ connect_port(LV2_Handle instance, uint32_t port, void* data)
 */
 static void
 activate(LV2_Handle instance)
-{}
+{
+  (void)instance;
+}
 
 /** Process a block of audio (audio thread, must be RT safe). */
 static void
 run(LV2_Handle instance, uint32_t n_samples)
-{}
+{
+  (void)instance;
+  (void)n_samples;
+}
 
 /**
    The deactivate() method is the counterpart to activate() called by the host
@@ -121,7 +122,9 @@ run(LV2_Handle instance, uint32_t n_samples)
 */
 static void
 deactivate(LV2_Handle instance)
-{}
+{
+  (void)instance;
+}
 
 /**
    Destroy a plugin instance (counterpart to instantiate()).
@@ -148,6 +151,8 @@ cleanup(LV2_Handle instance)
 static const void*
 extension_data(const char* uri)
 {
+  (void)uri;
+
   return NULL;
 }
 
@@ -179,10 +184,5 @@ LV2_SYMBOL_EXPORT
 const LV2_Descriptor*
 lv2_descriptor(uint32_t index)
 {
-  switch (index) {
-  case 0:
-    return &descriptor;
-  default:
-    return NULL;
-  }
+  return index ? NULL : &descriptor;
 }

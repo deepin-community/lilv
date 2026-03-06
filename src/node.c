@@ -1,25 +1,14 @@
-/*
-  Copyright 2007-2019 David Robillard <d@drobilla.net>
+// Copyright 2007-2019 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
-
-#include "filesystem.h"
 #include "lilv_internal.h"
 
-#include "lilv/lilv.h"
-#include "serd/serd.h"
-#include "sord/sord.h"
+#include <lilv/lilv.h>
+#include <serd/serd.h>
+#include <sord/sord.h>
+#include <zix/allocator.h>
+#include <zix/filesystem.h>
+#include <zix/path.h>
 
 #include <math.h>
 #include <stdbool.h>
@@ -108,9 +97,9 @@ lilv_node_new_from_node(LilvWorld* world, const SordNode* node)
     return NULL;
   }
 
-  LilvNode*    result       = NULL;
-  SordNode*    datatype_uri = NULL;
-  LilvNodeType type         = LILV_VALUE_STRING;
+  LilvNode*       result       = NULL;
+  const SordNode* datatype_uri = NULL;
+  LilvNodeType    type         = LILV_VALUE_STRING;
 
   switch (sord_node_get_type(node)) {
   case SORD_URI:
@@ -160,13 +149,23 @@ lilv_new_uri(LilvWorld* world, const char* uri)
 LilvNode*
 lilv_new_file_uri(LilvWorld* world, const char* host, const char* path)
 {
-  char*    abs_path = lilv_path_absolute(path);
-  SerdNode s        = serd_node_new_file_uri(
-    (const uint8_t*)abs_path, (const uint8_t*)host, NULL, true);
+  SerdNode s = SERD_NODE_NULL;
+  if (zix_path_root_directory(path).length) {
+    s = serd_node_new_file_uri(
+      (const uint8_t*)path, (const uint8_t*)host, NULL, true);
+  } else {
+    char* const cwd      = zix_current_path(NULL);
+    char* const abs_path = zix_path_join(NULL, cwd, path);
+
+    s = serd_node_new_file_uri(
+      (const uint8_t*)abs_path, (const uint8_t*)host, NULL, true);
+
+    zix_free(NULL, abs_path);
+    zix_free(NULL, cwd);
+  }
 
   LilvNode* ret = lilv_node_new(world, LILV_VALUE_URI, (const char*)s.buf);
   serd_node_free(&s);
-  free(abs_path);
   return ret;
 }
 

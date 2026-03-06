@@ -1,0 +1,7 @@
+CastIntegerToAddressAtReturn
+knownConditionTrueFalse
+memleakOnRealloc
+noExplicitConstructor
+normalCheckLevelMaxBranches
+redundantInitialization
+varFuncNullUB

@@ -1,32 +1,19 @@
-/*
-  Copyright 2007-2019 David Robillard <d@drobilla.net>
-
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
+// Copyright 2007-2019 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
 #include "lilv_internal.h"
 
-#include "lilv/lilv.h"
-#include "serd/serd.h"
-#include "sord/sord.h"
-#include "zix/tree.h"
-
-#include "lv2/core/lv2.h"
-#include "lv2/ui/ui.h"
-
 #ifdef LILV_DYN_MANIFEST
-#  include "lv2/dynmanifest/dynmanifest.h"
+#  include "dylib.h"
+#  include <lv2/dynmanifest/dynmanifest.h>
 #endif
+
+#include <lilv/lilv.h>
+#include <lv2/core/lv2.h>
+#include <lv2/ui/ui.h>
+#include <serd/serd.h>
+#include <sord/sord.h>
+#include <zix/tree.h>
 
 #include <math.h>
 #include <stdarg.h>
@@ -225,8 +212,8 @@ lilv_plugin_load(LilvPlugin* plugin)
   // Load and parse dynamic manifest data, if this is a library
   if (plugin->dynmanifest) {
     typedef int (*GetDataFunc)(
-      LV2_Dyn_Manifest_Handle handle, FILE * fp, const char* uri);
-    GetDataFunc get_data_func = (GetDataFunc)lilv_dlfunc(
+      LV2_Dyn_Manifest_Handle handle, FILE* fp, const char* uri);
+    GetDataFunc get_data_func = (GetDataFunc)dylib_func(
       plugin->dynmanifest->lib, "lv2_dyn_manifest_get_data");
     if (get_data_func) {
       const SordNode* bundle = plugin->dynmanifest->bundle->node;
@@ -502,7 +489,7 @@ lilv_plugin_get_name(const LilvPlugin* plugin)
 
   LilvNode* ret = NULL;
   if (results) {
-    LilvNode* val = lilv_nodes_get_first(results);
+    const LilvNode* val = lilv_nodes_get_first(results);
     if (lilv_node_is_string(val)) {
       ret = lilv_node_duplicate(val);
     }
@@ -580,9 +567,11 @@ lilv_plugin_get_port_ranges_float(const LilvPlugin* plugin,
 }
 
 uint32_t
-lilv_plugin_get_num_ports_of_class_va(const LilvPlugin* plugin,
-                                      const LilvNode*   class_1,
-                                      va_list           args)
+lilv_plugin_get_num_ports_of_class_va(
+  const LilvPlugin* plugin,
+  const LilvNode*   class_1,
+  va_list           args // NOLINT(readability-non-const-parameter)
+)
 {
   lilv_plugin_load_ports_if_necessary(plugin);
 
@@ -599,7 +588,7 @@ lilv_plugin_get_num_ports_of_class_va(const LilvPlugin* plugin,
 
   // Check each port against every type
   for (unsigned i = 0; i < plugin->num_ports; ++i) {
-    LilvPort* port = plugin->ports[i];
+    const LilvPort* port = plugin->ports[i];
     if (port && lilv_port_is_a(plugin, port, class_1)) {
       bool matches = true;
       for (size_t j = 0; j < n_classes; ++j) {
@@ -624,7 +613,7 @@ lilv_plugin_get_num_ports_of_class(const LilvPlugin* plugin,
                                    const LilvNode*   class_1,
                                    ...)
 {
-  va_list args;
+  va_list args; // NOLINT(cppcoreguidelines-init-variables)
   va_start(args, class_1);
 
   uint32_t count = lilv_plugin_get_num_ports_of_class_va(plugin, class_1, args);
@@ -1008,7 +997,7 @@ lilv_plugin_get_related(const LilvPlugin* plugin, const LilvNode* type)
 
   LilvNodes* matches = lilv_nodes_new();
   LILV_FOREACH (nodes, i, related) {
-    LilvNode* node = (LilvNode*)lilv_collection_get((ZixTree*)related, i);
+    const LilvNode* node = (LilvNode*)lilv_collection_get((ZixTree*)related, i);
     if (lilv_world_ask_internal(
           world, node->node, world->uris.rdf_a, type->node)) {
       zix_tree_insert(
@@ -1039,7 +1028,7 @@ new_lv2_env(const SerdNode* base)
 }
 
 static void
-maybe_write_prefixes(SerdWriter* writer, SerdEnv* env, FILE* file)
+maybe_write_prefixes(SerdWriter* writer, const SerdEnv* env, FILE* file)
 {
   fseek(file, 0, SEEK_END);
   if (ftell(file) == 0) {
@@ -1095,6 +1084,8 @@ lilv_plugin_write_manifest_entry(LilvWorld*        world,
                                  FILE*             manifest_file,
                                  const char*       plugin_file_path)
 {
+  (void)world;
+
   const LilvNode* subject = lilv_plugin_get_uri(plugin);
   const SerdNode* base    = sord_node_to_serd_node(base_uri->node);
   SerdEnv*        env     = new_lv2_env(base);

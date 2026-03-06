@@ -1,28 +1,14 @@
-/*
-  Copyright 2007-2019 David Robillard <d@drobilla.net>
-
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
+// Copyright 2007-2019 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
 #include "lilv_internal.h"
 
-#include "lv2/atom/atom.h"
-#include "lv2/core/lv2.h"
-#include "lv2/event/event.h"
-
-#include "lilv/lilv.h"
-#include "sord/sord.h"
-#include "zix/tree.h"
+#include <lilv/lilv.h>
+#include <lv2/atom/atom.h>
+#include <lv2/core/lv2.h>
+#include <lv2/event/event.h>
+#include <sord/sord.h>
+#include <zix/tree.h>
 
 #include <assert.h>
 #include <stdbool.h>
@@ -47,6 +33,8 @@ lilv_port_new(LilvWorld*      world,
 void
 lilv_port_free(const LilvPlugin* plugin, LilvPort* port)
 {
+  (void)plugin;
+
   if (port) {
     lilv_node_free(port->node);
     lilv_nodes_free(port->classes);
@@ -60,6 +48,8 @@ lilv_port_is_a(const LilvPlugin* plugin,
                const LilvPort*   port,
                const LilvNode*   port_class)
 {
+  (void)plugin;
+
   LILV_FOREACH (nodes, i, port->classes) {
     if (lilv_node_equals(lilv_nodes_get(port->classes, i), port_class)) {
       return true;
@@ -112,6 +102,8 @@ lilv_port_get_value_by_node(const LilvPlugin* plugin,
 const LilvNode*
 lilv_port_get_node(const LilvPlugin* plugin, const LilvPort* port)
 {
+  (void)plugin;
+
   return port->node;
 }
 
@@ -146,12 +138,16 @@ lilv_port_get(const LilvPlugin* plugin,
 uint32_t
 lilv_port_get_index(const LilvPlugin* plugin, const LilvPort* port)
 {
+  (void)plugin;
+
   return port->index;
 }
 
 const LilvNode*
 lilv_port_get_symbol(const LilvPlugin* plugin, const LilvPort* port)
 {
+  (void)plugin;
+
   return port->symbol;
 }
 
@@ -163,7 +159,7 @@ lilv_port_get_name(const LilvPlugin* plugin, const LilvPort* port)
 
   LilvNode* ret = NULL;
   if (results) {
-    LilvNode* val = lilv_nodes_get_first(results);
+    const LilvNode* val = lilv_nodes_get_first(results);
     if (lilv_node_is_string(val)) {
       ret = lilv_node_duplicate(val);
     }
@@ -181,6 +177,8 @@ lilv_port_get_name(const LilvPlugin* plugin, const LilvPort* port)
 const LilvNodes*
 lilv_port_get_classes(const LilvPlugin* plugin, const LilvPort* port)
 {
+  (void)plugin;
+
   return port->classes;
 }
 
@@ -225,10 +223,11 @@ lilv_port_get_scale_points(const LilvPlugin* plugin, const LilvPort* port)
     sord_new_uri(plugin->world->world, (const uint8_t*)LV2_CORE__scalePoint),
     NULL);
 
-  LilvScalePoints* ret = NULL;
-  if (!sord_iter_end(points)) {
-    ret = lilv_scale_points_new();
+  if (!points) {
+    return NULL;
   }
+
+  LilvScalePoints* ret = lilv_scale_points_new();
 
   FOREACH_MATCH (points) {
     const SordNode* point = sord_iter_get_node(points, SORD_OBJECT);
@@ -241,11 +240,14 @@ lilv_port_get_scale_points(const LilvPlugin* plugin, const LilvPort* port)
 
     if (value && label) {
       zix_tree_insert((ZixTree*)ret, lilv_scale_point_new(value, label), NULL);
+    } else {
+      lilv_node_free(label);
+      lilv_node_free(value);
     }
   }
   sord_iter_free(points);
 
-  assert(!ret || lilv_nodes_size(ret) > 0);
+  assert(lilv_nodes_size(ret) > 0);
   return ret;
 }
 

@@ -1,28 +1,14 @@
-/*
-  Copyright 2020 David Robillard <d@drobilla.net>
-
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted, provided that the above
-  copyright notice and this permission notice appear in all copies.
-
-  THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
-
-#define _POSIX_C_SOURCE 200809L /* for setenv */
+// Copyright 2020 David Robillard <d@drobilla.net>
+// SPDX-License-Identifier: ISC
 
 #include "lilv_test_utils.h"
 
-#include "../src/filesystem.h"
-#include "../src/lilv_internal.h"
-
-#include "lilv/lilv.h"
-#include "serd/serd.h"
+#include <lilv/lilv.h>
+#include <serd/serd.h>
+#include <zix/allocator.h>
+#include <zix/filesystem.h>
+#include <zix/path.h>
+#include <zix/status.h>
 
 #include <errno.h>
 #include <stdbool.h>
@@ -46,13 +32,13 @@ lilv_test_env_new(void)
   env->plugin2_uri = lilv_new_uri(world, "http://example.org/foobar");
 
   // Set custom LV2_PATH in build directory to only use test data
-  char*     test_path = lilv_path_canonical(LILV_TEST_DIR);
-  char*     lv2_path  = lilv_strjoin(test_path, "/test_lv2_path", NULL);
+  char*     test_path = zix_canonical_path(NULL, LILV_TEST_DIR);
+  char*     lv2_path  = zix_path_join(NULL, test_path, "lv2");
   LilvNode* path      = lilv_new_string(world, lv2_path);
   lilv_world_set_option(world, LILV_OPTION_LV2_PATH, path);
-  free(lv2_path);
-  free(test_path);
   lilv_node_free(path);
+  zix_free(NULL, lv2_path);
+  zix_free(NULL, test_path);
 
   return env;
 }
@@ -60,10 +46,10 @@ lilv_test_env_new(void)
 void
 lilv_test_env_free(LilvTestEnv* env)
 {
-  free(env->test_content_path);
-  free(env->test_manifest_path);
-  free(env->test_bundle_uri);
-  free(env->test_bundle_path);
+  zix_free(NULL, env->test_content_path);
+  zix_free(NULL, env->test_manifest_path);
+  lilv_node_free(env->test_bundle_uri);
+  zix_free(NULL, env->test_bundle_path);
   lilv_node_free(env->plugin2_uri);
   lilv_node_free(env->plugin1_uri);
   lilv_world_free(env->world);
@@ -71,17 +57,22 @@ lilv_test_env_free(LilvTestEnv* env)
 }
 
 int
-create_bundle(LilvTestEnv* env, const char* manifest, const char* plugin)
+create_bundle(LilvTestEnv* env,
+              const char*  name,
+              const char*  manifest,
+              const char*  plugin)
 {
   {
-    static const char* const bundle_path = "/test_lv2_path/lilv-test.lv2";
+    char* const test_dir   = zix_canonical_path(NULL, LILV_TEST_DIR);
+    char* const bundle_dir = zix_path_join(NULL, test_dir, name);
 
-    char* const test_path = lilv_path_canonical(LILV_TEST_DIR);
-    env->test_bundle_path = lilv_strjoin(test_path, bundle_path, NULL);
-    lilv_free(test_path);
+    env->test_bundle_path = zix_path_join(NULL, bundle_dir, "");
+
+    zix_free(NULL, bundle_dir);
+    zix_free(NULL, test_dir);
   }
 
-  if (lilv_create_directories(env->test_bundle_path)) {
+  if (zix_create_directories(NULL, env->test_bundle_path)) {
     fprintf(stderr,
             "Failed to create directory '%s' (%s)\n",
             env->test_bundle_path,
@@ -92,11 +83,13 @@ create_bundle(LilvTestEnv* env, const char* manifest, const char* plugin)
   SerdNode s = serd_node_new_file_uri(
     (const uint8_t*)env->test_bundle_path, NULL, NULL, true);
 
-  env->test_bundle_uri = lilv_strjoin((const char*)s.buf, "/", NULL);
+  env->test_bundle_uri = lilv_new_uri(env->world, (const char*)s.buf);
+
   env->test_manifest_path =
-    lilv_strjoin(env->test_bundle_path, "/manifest.ttl", NULL);
+    zix_path_join(NULL, env->test_bundle_path, "manifest.ttl");
+
   env->test_content_path =
-    lilv_strjoin(env->test_bundle_path, "/plugin.ttl", NULL);
+    zix_path_join(NULL, env->test_bundle_path, "plugin.ttl");
 
   serd_node_free(&s);
 
@@ -130,35 +123,48 @@ create_bundle(LilvTestEnv* env, const char* manifest, const char* plugin)
 }
 
 int
-start_bundle(LilvTestEnv* env, const char* manifest, const char* plugin)
+start_bundle(LilvTestEnv* env,
+             const char*  name,
+             const char*  manifest,
+             const char*  plugin)
 {
-  if (create_bundle(env, manifest, plugin)) {
+  if (create_bundle(env, name, manifest, plugin)) {
     return 1;
   }
 
-  lilv_world_load_all(env->world);
+  lilv_world_load_bundle(env->world, env->test_bundle_uri);
+
   return 0;
+}
+
+static void
+remove_temporary(const char* const path)
+{
+  const ZixStatus st = zix_remove(path);
+  if (st) {
+    fprintf(stderr, "Failed to remove '%s' (%s)\n", path, zix_strerror(st));
+  }
 }
 
 void
 delete_bundle(LilvTestEnv* env)
 {
   if (env->test_content_path) {
-    lilv_remove(env->test_content_path);
+    remove_temporary(env->test_content_path);
   }
 
   if (env->test_manifest_path) {
-    lilv_remove(env->test_manifest_path);
+    remove_temporary(env->test_manifest_path);
   }
 
   if (env->test_bundle_path) {
-    remove(env->test_bundle_path);
+    remove_temporary(env->test_bundle_path);
   }
 
-  free(env->test_content_path);
-  free(env->test_manifest_path);
-  free(env->test_bundle_uri);
-  free(env->test_bundle_path);
+  zix_free(NULL, env->test_content_path);
+  zix_free(NULL, env->test_manifest_path);
+  lilv_node_free(env->test_bundle_uri);
+  zix_free(NULL, env->test_bundle_path);
 
   env->test_content_path  = NULL;
   env->test_manifest_path = NULL;
@@ -179,4 +185,30 @@ set_env(const char* name, const char* value)
 #else
   setenv(name, value, 1);
 #endif
+}
+
+char*
+lilv_create_temporary_directory(const char* pattern)
+{
+  char* const tmpdir       = zix_temp_directory_path(NULL);
+  char* const path_pattern = zix_path_join(NULL, tmpdir, pattern);
+  char* const result       = zix_create_temporary_directory(NULL, path_pattern);
+
+  zix_free(NULL, path_pattern);
+  zix_free(NULL, tmpdir);
+
+  return result;
+}
+
+char*
+string_concat(const char* const head, const char* const tail)
+{
+  const size_t head_len = strlen(head);
+  const size_t tail_len = strlen(tail);
+  char* const  result   = (char*)calloc(1U, head_len + tail_len + 1U);
+  if (result) {
+    memcpy(result, head, head_len + 1U);
+    memcpy(result + head_len, tail, tail_len + 1U);
+  }
+  return result;
 }

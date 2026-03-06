@@ -5,19 +5,27 @@ Maintainer: Debian Multimedia Maintainers <debian-multimedia@lists.debian.org>
 Uploaders:
  Alessio Treglia <alessio@debian.org>,
  Jaromír Mikeš <mira.mikes@seznam.cz>,
- Dennis Braun <d_braun@kabelmail.de>
+ Dennis Braun <snd@debian.org>
 Build-Depends:
  debhelper-compat (= 13),
- libjack-dev,
+ dh-python,
  libsndfile1-dev,
- libserd-dev (>= 0.22.0~),
- libsord-dev (>= 0.14.0~),
- libsratom-dev (>= 0.4.0~),
+ libserd-dev,
+ libsord-dev,
+ libsratom-dev,
+ libzix-dev,
  lv2-dev (>= 1.18.0~),
- pkg-config,
- python3:native
-Standards-Version: 4.5.1
-Homepage: https://drobilla.net/software/lilv/
+ meson,
+ ninja-build,
+ pkgconf,
+ python3:any
+Build-Depends-Indep:
+ doxygen,
+ graphviz,
+ python3-sphinx,
+ sphinxygen
+Standards-Version: 4.7.0
+Homepage: https://drobilla.net/software/lilv.html
 Vcs-Git: https://salsa.debian.org/multimedia-team/lilv.git
 Vcs-Browser: https://salsa.debian.org/multimedia-team/lilv
 Rules-Requires-Root: no
@@ -43,9 +51,10 @@ Architecture: any
 Multi-Arch: same
 Depends:
  liblilv-0-0 (= ${binary:Version}),
- libserd-dev (>= 0.22.0~),
- libsord-dev (>= 0.14.0~),
- libsratom-dev (>= 0.4.0~),
+ libserd-dev,
+ libsord-dev,
+ libsratom-dev,
+ libzix-dev,
  lv2-dev,
  ${misc:Depends}
 Description: library for simple use of LV2 plugins (development files)
@@ -56,6 +65,24 @@ Description: library for simple use of LV2 plugins (development files)
  and have minimal dependencies.
  .
  This package provides the development files.
+
+Package: liblilv-doc
+Section: doc
+Architecture: all
+Multi-Arch: foreign
+Enhances:
+ liblilv-dev
+Depends:
+ libjs-sphinxdoc (>= 3.4.3-1),
+ ${misc:Depends}
+Description: library for simple use of LV2 plugins (documentation)
+ Lilv (formerly SLV2) is a library for LV2 hosts intended to make using
+ LV2 Plugins as simple as possible (without sacrificing capabilities).
+ .
+ Lilv is the successor to SLV2, rewritten to be significantly faster
+ and have minimal dependencies.
+ .
+ This package provides the developer's reference for lilv.
 
 Package: lilv-utils
 Section: sound
@@ -78,3 +105,19 @@ Description: library for simple use of LV2 plugins (runtime files)
   * lv2apply - Apply an LV2 plugin to an audio file.
   * lv2bench - Benchmark all installed and supported LV2 plugins.
   * lilv-bench
+
+Package: python3-lilv
+Architecture: all
+Section: python
+Depends:
+ liblilv-0-0 (>= ${source:Version}),
+ ${misc:Depends},
+ ${python3:Depends}
+Description: Python bindings for lilv
+ Lilv (formerly SLV2) is a library for LV2 hosts intended to make using
+ LV2 Plugins as simple as possible (without sacrificing capabilities).
+ .
+ Lilv is the successor to SLV2, rewritten to be significantly faster
+ and have minimal dependencies.
+ .
+ This package provides the Python binding for lilv.
